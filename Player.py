@@ -4,43 +4,59 @@ import os
 from NeuralNetwork import NeuralNetwork
 ###CHARACTER###
 
-IMAGE = pygame.image.load(os.path.join('Assets', 'RunningMan.png'))
+IMAGE = pygame.image.load(os.path.join('Assets', 'llama.png'))
 WIN_W, WIN_H = 900, 500
 
+
 class Player:
-    def __init__(self, win):
+    def __init__(self, win, brain):
         self.w = 155
         self.h = 140
-        self.char = pygame.transform.scale(IMAGE, (self.w, self.h))
+        self.sprite = pygame.transform.scale(IMAGE, (self.w, self.h))
         self.x = 100
         self.y = 300
-        self.vely = 25
         self.score = 0
         self.fitness = 0
-        self.jump = False
-        self.brain = None
-        self.hitbox = pygame.draw.rect(win, (255,0,0),(self.x+55,self.y+20,50,100),2)
+        self.gravity = .55
+        self.on_ground = False
+        self.acceleration = pygame.math.Vector2(0, self.gravity)
+        self.velY = 0
+        self.brain = brain
+        self.rect = self.sprite.get_rect(topleft=(0, 300))
+        self.hitbox = pygame.Rect(self.x, self.y, 10, 90)
         if self.brain == None:
-            self.brain = NeuralNetwork(3, 7, 2, None)
+            self.brain = NeuralNetwork(2, 7, 1, None)
         else:
-            self.brain = self.brain.copy()
+            self.brain = self.brain.copied()
+
+    def __str__(self):
+        return f'Fitness: {self.fitness}, Brain: {self.brain}'
+    
+    def __repr__(self):
+        return f'Fitness: {self.fitness}, Brain: {self.brain}'
+
+    def move(self,dt):
+        self.velY += self.acceleration.y * dt
+        if self.velY > 15: self.velY = 15
+        self.rect.y += self.velY * dt + (self.acceleration.y * .5) * (dt*dt)
+        if self.rect.y > 300:
+            self.on_ground = True
+            self.velY = 0
+            self.rect.y = 300
 
     def jumpAction(self):
-        if self.jump is False:
-            self.jump = True
-        if self.jump:
-            self.y -= self.vely
-            self.vely -= 1
-        if self.vely < -25:
-            self.jump = False
-            self.vely = 25
+        if self.on_ground:
+            self.velY -= 15
+            self.on_ground = False
 
     def draw(self,win):
-        self.hitbox = pygame.draw.rect(win, (255,0,0),(self.x+55,self.y+20,50,100),2)
-        win.blit(self.char, (self.x, self.y))
+        self.hitbox = pygame.Rect(self.rect.x+20, self.rect.y+20, 70, 110)
+        char_rect = pygame.draw.rect(win, (255,0,0),(self.hitbox),-1)
+        win.blit(self.sprite, self.rect)
     
-    def update(self):
+    def update(self,dt):
         self.score+=1
+        self.move(dt)
     
     def dispose(self):
         self.brain.dispose()
@@ -54,12 +70,13 @@ class Player:
         closestD = float("inf")
         for i in range(len(tunnels)):
             d = tunnels[i].hitbox.x - self.x
-            if (d < closestD and d > 0):
+            if (d < closestD):
                 closest = tunnels[i]
                 closestD = d
-        inputs = np.asarray([self.y / WIN_H, closest.hitbox.x / WIN_W, self.vely / 10])
+    
+        inputs = np.asarray([self.y, closest.hitbox.x])
         inputs = np.atleast_2d(inputs)
         output = self.brain.predict(inputs)
-        if output[0] <.5:
-            self.jumpAction()
-###CHARACTER###
+        if output[0] < .5:
+                self.jumpAction()
+           

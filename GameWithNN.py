@@ -1,60 +1,60 @@
+#ML Learning Project
+#Video for Genetic Algorithm: https://www.youtube.com/playlist?list=PLRqwX-V7Uu6bJM3VgzjNV5YxVxUwzALHV
+#
+
+#os.environ["CUDA_VISIBLE_DEVICES"]="-1" #Use CPU
+
 import pygame
-import os
-os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
-import random
+import os, time,random
 from Player import Player
 from Tunnel import Tunnel
 
-
 ###GN ALGO###
 def nextGen(savedPlayers):
-    calcFit()
-    for i in range(TOTAL):
+    calcFit(savedPlayers) # Calculate the fitness of each savedPlayer
+    for i in range(TOTAL_PLAYERS):
         players.append(pickOne())
-    for i in range(TOTAL):
-        savedPlayers[i].dispose()
-    savedPlayers = []
+    savedPlayers.clear()
     return savedPlayers
 
-def pickOne():
-    index = 0
-    r = random.uniform(0,1)
-    while r > 0:
-        r = r - savedPlayers[index].fitness
-        index+=1
-    index -= 1
-    play = savedPlayers[index]
-    child = Player(WIN)
-    child.brain = play.brain
-    child.mutate()
-    return child
-
-
-
-def calcFit():
+def calcFit(savedPlayers):
     summ = 0
     for p in savedPlayers:
-        summ += p.score
+        summ += p.score    # Add up all of the scores
     for p in savedPlayers:
-        p.fitness = p.score / summ
+        p.fitness = p.score / summ #Normalizing all of the fitness
+    return savedPlayers # We return the list of savedPlayers with their updated fitnesses.
+
+def pickOne():
+    index = 0 # Assume that the one we will pick is first
+    r = random.uniform(0,1) # Random number between 0 and 1.0
+    while r > 0:
+        r = r - savedPlayers[index].fitness # Pick until we are below 0
+        index+=1
+    index -= 1
+    play = savedPlayers[index] # Best fitness
+    
+    child = Player(WIN, play.brain) #I make a child and use the best players brain
+    child.mutate()
+    return child
+###GN ALGO###
 
 ###SCORE and HIGHSCORE###
 def score_display(game_state):
     if game_state == 'main_game':
         font = pygame.font.SysFont(None, 24, bold=False, italic=False)
         gen_surface = font.render(
-            f'Generation: {int(generation)}', True, (255, 255, 255))
+            f'Generation: {int(generation)}', True, (0, 0, 0))
         gen_rect = gen_surface.get_rect(center=(400, 50))
         WIN.blit(gen_surface, gen_rect)
         score_surface = font.render(
-            f'Score: {int(game_score)}', True, (255, 255, 255))
+            f'Score: {int(game_score)}', True, (0, 0, 0))
         score_rect = score_surface.get_rect(center=(100, 50))
         WIN.blit(score_surface, score_rect)
         high_score_surface = font.render(
-            f'High Score: {int(high_score)}', True, (255, 255, 255))
+            f'High Score: {int(high_score)}', True, (0, 0, 0))
         high_score_rect = high_score_surface.get_rect(center=(800, 50))
         WIN.blit(high_score_surface, high_score_rect)
-
 
 def update_score(score, high_score):
     if score > high_score:
@@ -74,60 +74,67 @@ bg = pygame.transform.scale(bg_img, (WIDTH, HEIGHT))
 pygame.display.set_caption("Jump AI")  # Window Title
 
 
-
-
 SPAWNTUNNEL = pygame.USEREVENT
-pygame.time.set_timer(SPAWNTUNNEL, 2300)  # Spawns a tunnel every 2.3 seconds
+pygame.time.set_timer(SPAWNTUNNEL, random.randint(1000, 1500)) #Timer to spawn Tunnel
 
-# Initiates Character
 
-TOTAL = 5
+TOTAL_PLAYERS = 15
 players = []
 savedPlayers = []
 tunnel_list = []
-generation = 0
-
-for i in range(TOTAL):
-    players.append(Player(WIN))
+generation = 1
+for i in range(TOTAL_PLAYERS):
+    players.append(Player(WIN, None))
 bgi = 0
 game_score = 0
 high_score = 0
-game_active = True
-FPS = 60  # Frames Per Second
+FPS = 60
+
+
+last_time = time.time()
+
 clock = pygame.time.Clock()
 game_running = True
-tunnel_list.append(Tunnel())
 while game_running:  # GameLoop
-    clock.tick(FPS)  # Ensuring we never go over capped framerate
+    dt = time.time() - last_time
+    dt*=FPS
+    last_time = time.time()
     for event in pygame.event.get():  # Every event will be under here
         if event.type == pygame.QUIT:  # Event to run when we click the X button
             game_running = False
         if event.type == SPAWNTUNNEL:
+            pygame.time.set_timer(SPAWNTUNNEL, random.randint(1000, 2000))
             tunnel_list.append(Tunnel())
+
     
-        # Tunnels
+    # Tunnels
     for tunnel in reversed(tunnel_list):
-        tunnel.move()
-        for player in reversed(players):
-            crash = tunnel.collision(player)
-            if crash:
-                savedPlayers.append(players.pop(0))
-        if tunnel.offscreen(player):
-              tunnel_list.remove(tunnel)
+        tunnel.move(dt)
+        if tunnel.hitbox.x < -100:
+                tunnel_list.remove(tunnel)
+
+
+    for tunnel in tunnel_list:
+        for x,player in enumerate(players):
+            if len(tunnel_list) == 0:
+                pass    
+            if tunnel.collision(player):
+                savedPlayers.append(players.pop(x))
 
     for player in players:
-        player.think(tunnel_list)
-        player.update()
+        if len(tunnel_list) == 0:
+                pass
+        else:
+            player.think(tunnel_list)
+            player.update(dt)
 
     if len(players) == 0:
+        print("All Dead")
         high_score = update_score(game_score, high_score)
         game_score = 0
         generation += 1
         nextGen(savedPlayers)
         tunnel_list.clear()
-        pygame.time.set_timer(SPAWNTUNNEL, 0)
-        pygame.time.set_timer(SPAWNTUNNEL, 2300)
-        tunnel_list.append(Tunnel())
 
 
     ### Background ###
@@ -150,8 +157,7 @@ while game_running:  # GameLoop
 
     game_score += 0.03
     score_display('main_game')
-    #pygame.time.delay(10)
     pygame.display.update()
-
+    clock.tick(FPS)
 pygame.quit()
 ### GAME CODE ###
